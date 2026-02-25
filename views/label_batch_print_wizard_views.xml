@@ -16,7 +16,7 @@
                     <field name="recent_added_days"/>
                     <button name="action_add_recent_added" type="object" string="Add Recently Added" class="btn-secondary"/>
                     <field name="recent_delivered_days"/>
-                    <button name="action_add_recent_received" type="object" string="Add Recently Received" class="btn-secondary"/>
+                    <button name="action_add_recent_delivered" type="object" string="Add Recently Received" class="btn-secondary"/>
                     <field name="incoming_days"/>
                     <button name="action_add_incoming_soon" type="object" string="Add Incoming Soon" class="btn-secondary"/>
                 </group>
