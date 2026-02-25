@@ -24,7 +24,7 @@ class LabelBatchPrintWizard(models.TransientModel):
     labels_per_page = fields.Integer(string='Labels per Page', required=True, default=20)
 
     recent_added_days = fields.Integer(string='Recent Added (days)', default=30, required=True)
-    recent_delivered_days = fields.Integer(string='Recent Delivered (days)', default=14, required=True)
+    recent_delivered_days = fields.Integer(string='Recent Received (days)', default=14, required=True)
     incoming_days = fields.Integer(string='Incoming Soon (days)', default=14, required=True)
 
     policy_selection = [
@@ -35,7 +35,7 @@ class LabelBatchPrintWizard(models.TransientModel):
     name_policy = fields.Selection(policy_selection, default='block', required=True)
     default_code_policy = fields.Selection(policy_selection, default='warn', required=True)
     barcode_policy = fields.Selection(policy_selection, default='block', required=True)
-    price_policy = fields.Selection(policy_selection, default='warn', required=True)
+    price_policy = fields.Selection(policy_selection, default='block', required=True)
 
     price_field = fields.Selection(
         [
@@ -51,7 +51,7 @@ class LabelBatchPrintWizard(models.TransientModel):
 
     total_labels = fields.Integer(compute='_compute_totals', string='Total Labels', store=False)
     page_count = fields.Integer(compute='_compute_totals', string='Estimated Pages', store=False)
-    page_remainder = fields.Integer(compute='_compute_totals', string='Remaining Labels', store=False)
+    page_remainder = fields.Integer(compute='_compute_totals', string='Remaining Slots', store=False)
 
     @api.model
     def _default_warehouse_id(self):
@@ -84,7 +84,7 @@ class LabelBatchPrintWizard(models.TransientModel):
             wizard.total_labels = total
             labels_per_page = max(wizard.labels_per_page, 1)
             wizard.page_count = (total // labels_per_page) + (1 if total % labels_per_page else 0)
-            wizard.page_remainder = total % labels_per_page
+            wizard.page_remainder = (labels_per_page - (total % labels_per_page)) % labels_per_page
 
     @api.onchange('template_report_id')
     def _onchange_template_report_id(self):
@@ -96,16 +96,14 @@ class LabelBatchPrintWizard(models.TransientModel):
         else:
             self.price_field = 'list_price'
 
-    def _ensure_valid_days(self):
+    def _ensure_positive_value(self, value, label):
         self.ensure_one()
-        for value, label in [
-            (self.recent_added_days, _('Recent Added (days)')),
-            (self.recent_delivered_days, _('Recent Delivered (days)')),
-            (self.incoming_days, _('Incoming Soon (days)')),
-            (self.labels_per_page, _('Labels per Page')),
-        ]:
-            if value <= 0:
-                raise UserError(_('%s must be greater than zero.') % label)
+        if value <= 0:
+            raise UserError(_('%s must be greater than zero.') % label)
+
+    def _ensure_labels_per_page(self):
+        self.ensure_one()
+        self._ensure_positive_value(self.labels_per_page, _('Labels per Page'))
 
     def _merge_products_into_lines(self, products):
         self.ensure_one()
@@ -126,7 +124,7 @@ class LabelBatchPrintWizard(models.TransientModel):
 
     def action_add_recent_added(self):
         self.ensure_one()
-        self._ensure_valid_days()
+        self._ensure_positive_value(self.recent_added_days, _('Recent Added (days)'))
 
         cutoff = fields.Datetime.now() - timedelta(days=self.recent_added_days)
         company = self.env.company
@@ -139,15 +137,15 @@ class LabelBatchPrintWizard(models.TransientModel):
         self._merge_products_into_lines(products)
         return self._reload_action()
 
-    def action_add_recent_delivered(self):
+    def action_add_recent_received(self):
         self.ensure_one()
-        self._ensure_valid_days()
+        self._ensure_positive_value(self.recent_delivered_days, _('Recent Received (days)'))
 
         cutoff = fields.Datetime.now() - timedelta(days=self.recent_delivered_days)
         move_domain = [
             ('state', '=', 'done'),
             ('date', '>=', cutoff),
-            ('picking_id.picking_type_id.code', '=', 'outgoing'),
+            ('picking_id.picking_type_id.code', '=', 'incoming'),
             ('picking_id.picking_type_id.warehouse_id', '=', self.warehouse_id.id),
         ]
         moves = self.env['stock.move'].search(move_domain)
@@ -155,9 +153,13 @@ class LabelBatchPrintWizard(models.TransientModel):
         self._merge_products_into_lines(products)
         return self._reload_action()
 
+    # Backward-compatible alias for older XML/button names.
+    def action_add_recent_delivered(self):
+        return self.action_add_recent_received()
+
     def action_add_incoming_soon(self):
         self.ensure_one()
-        self._ensure_valid_days()
+        self._ensure_positive_value(self.incoming_days, _('Incoming Soon (days)'))
 
         date_from = fields.Datetime.now()
         date_to = date_from + timedelta(days=self.incoming_days)
@@ -214,6 +216,7 @@ class LabelBatchPrintWizard(models.TransientModel):
 
     def action_validate(self):
         self.ensure_one()
+        self._ensure_labels_per_page()
         if not self.line_ids:
             raise UserError(_('Add at least one product line before validating.'))
 
@@ -231,17 +234,25 @@ class LabelBatchPrintWizard(models.TransientModel):
 
         if self.page_remainder:
             warning_lines.append(
-                _('Total labels (%s) is not a multiple of labels per page (%s).')
-                % (self.total_labels, self.labels_per_page)
+                _('Current page is partially filled: %s empty slot(s) left (page size: %s).')
+                % (self.page_remainder, self.labels_per_page)
             )
 
         if warning_lines:
             message = '\n'.join(warning_lines)
-            self.env.user.notify_warning(message=message, title=_('Validation warnings'))
-        else:
-            self.env.user.notify_success(message=_('Validation successful.'))
+            return self._notification_action(
+                notif_type='warning',
+                title=_('Validation warnings'),
+                message=message,
+                next_action=self._reload_action(),
+            )
 
-        return self._reload_action()
+        return self._notification_action(
+            notif_type='success',
+            title=_('Validation successful'),
+            message=_('All selected lines are valid for printing.'),
+            next_action=self._reload_action(),
+        )
 
     def _get_line_price(self, line):
         product = line.product_id
@@ -285,21 +296,24 @@ class LabelBatchPrintWizard(models.TransientModel):
         report_name = (report.report_name or '').lower()
         known = any(token in report_name for token in ('label', 'barcode'))
         if not known:
-            self.env.user.notify_warning(
-                title=_('Template compatibility warning'),
-                message=_(
-                    'The selected template does not look like a label report. '
-                    'Printing will continue, but consider using a dedicated label template.'
-                ),
+            return _(
+                'Selected template does not look like a label report. '
+                'Printing will continue, but verify template compatibility.'
             )
+        return False
 
     def action_print(self):
         self.ensure_one()
+        self._ensure_labels_per_page()
         if not self.line_ids:
             raise UserError(_('Add at least one product line before printing.'))
 
-        self.action_validate()
-        self._validate_template_compatibility()
+        issues = self._line_field_issues()
+        blocking = any(v['block'] for v in issues.values())
+        if blocking:
+            raise UserError(self._format_issue_message(issues, _('Label validation failed.')))
+
+        warning_msg = self._validate_template_compatibility()
 
         report = self.template_report_id
         payload = {
@@ -310,6 +324,7 @@ class LabelBatchPrintWizard(models.TransientModel):
                 'total_labels': self.total_labels,
                 'page_count': self.page_count,
                 'page_remainder': self.page_remainder,
+                'warning': warning_msg or '',
                 'rows': self._prepare_payload_rows(),
             }
         }
@@ -334,6 +349,21 @@ class LabelBatchPrintWizard(models.TransientModel):
             'res_id': self.id,
             'view_mode': 'form',
             'target': 'new',
+        }
+
+    def _notification_action(self, notif_type, title, message, next_action=None):
+        params = {
+            'type': notif_type,
+            'title': title,
+            'message': message,
+            'sticky': False,
+        }
+        if next_action:
+            params['next'] = next_action
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': params,
         }
 
 

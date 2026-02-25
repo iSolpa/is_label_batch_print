@@ -16,7 +16,7 @@
                     <field name="recent_added_days"/>
                     <button name="action_add_recent_added" type="object" string="Add Recently Added" class="btn-secondary"/>
                     <field name="recent_delivered_days"/>
-                    <button name="action_add_recent_delivered" type="object" string="Add Recently Delivered" class="btn-secondary"/>
+                    <button name="action_add_recent_received" type="object" string="Add Recently Received" class="btn-secondary"/>
                     <field name="incoming_days"/>
                     <button name="action_add_incoming_soon" type="object" string="Add Incoming Soon" class="btn-secondary"/>
                 </group>
@@ -50,7 +50,7 @@
                 </group>
 
                 <div class="alert alert-warning" role="alert" invisible="page_remainder == 0">
-                    Total labels is not a multiple of labels per page. Printing is allowed, but the last physical page may be partially used.
+                    Current page is partially filled. Printing is allowed, but the current or next physical page may contain empty slots.
                 </div>
 
                 <footer>
