@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_label_batch_print_wizard_form" model="ir.ui.view">
+        <field name="name">label.batch.print.wizard.form</field>
+        <field name="model">label.batch.print.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Batch Label Printing">
+                <group col="4">
+                    <field name="warehouse_id" options="{'no_create': True}"/>
+                    <field name="template_report_id" options="{'no_create': True}"/>
+                    <field name="labels_per_page"/>
+                    <field name="price_field"/>
+                </group>
+
+                <group string="Quick Add Windows" col="6">
+                    <field name="recent_added_days"/>
+                    <button name="action_add_recent_added" type="object" string="Add Recently Added" class="btn-secondary"/>
+                    <field name="recent_delivered_days"/>
+                    <button name="action_add_recent_delivered" type="object" string="Add Recently Delivered" class="btn-secondary"/>
+                    <field name="incoming_days"/>
+                    <button name="action_add_incoming_soon" type="object" string="Add Incoming Soon" class="btn-secondary"/>
+                </group>
+
+                <group string="Validation Policies" col="4">
+                    <field name="name_policy"/>
+                    <field name="default_code_policy"/>
+                    <field name="barcode_policy"/>
+                    <field name="price_policy"/>
+                </group>
+
+                <group string="Products" col="1">
+                    <field name="line_ids" nolabel="1" context="{'default_wizard_id': id}">
+                        <tree editable="bottom" string="Label Lines">
+                            <field name="product_id"/>
+                            <field name="quantity"/>
+                            <field name="validation_status" readonly="1"/>
+                            <field name="validation_message" readonly="1"/>
+                            <field name="missing_name" readonly="1" optional="hide"/>
+                            <field name="missing_default_code" readonly="1" optional="hide"/>
+                            <field name="missing_barcode" readonly="1" optional="hide"/>
+                            <field name="missing_price" readonly="1" optional="hide"/>
+                        </tree>
+                    </field>
+                </group>
+
+                <group string="Summary" col="3">
+                    <field name="total_labels" readonly="1"/>
+                    <field name="page_count" readonly="1"/>
+                    <field name="page_remainder" readonly="1"/>
+                </group>
+
+                <div class="alert alert-warning" role="alert" invisible="page_remainder == 0">
+                    Total labels is not a multiple of labels per page. Printing is allowed, but the last physical page may be partially used.
+                </div>
+
+                <footer>
+                    <button name="action_validate" type="object" string="Validate" class="btn-secondary"/>
+                    <button name="action_print" type="object" string="Print Labels" class="btn-primary" data-hotkey="q"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel" data-hotkey="z"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_label_batch_print_wizard" model="ir.actions.act_window">
+        <field name="name">Batch Label Printing</field>
+        <field name="res_model">label.batch.print.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="groups_id" eval="[(4, ref('stock.group_stock_user'))]"/>
+    </record>
+
+    <menuitem id="menu_label_batch_print_wizard"
+              name="Batch Label Printing"
+              parent="stock.menu_stock_root"
+              action="action_label_batch_print_wizard"
+              groups="stock.group_stock_user"
+              sequence="60"/>
+
+    <record id="action_label_batch_print_from_product_product" model="ir.actions.act_window">
+        <field name="name">Batch Label Printing</field>
+        <field name="res_model">label.batch.print.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="binding_model_id" ref="product.model_product_product"/>
+        <field name="binding_type">action</field>
+        <field name="binding_view_types">list,form</field>
+        <field name="groups_id" eval="[(4, ref('stock.group_stock_user'))]"/>
+    </record>
+
+    <record id="action_label_batch_print_from_product_template" model="ir.actions.act_window">
+        <field name="name">Batch Label Printing</field>
+        <field name="res_model">label.batch.print.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="binding_model_id" ref="product.model_product_template"/>
+        <field name="binding_type">action</field>
+        <field name="binding_view_types">list,form</field>
+        <field name="groups_id" eval="[(4, ref('stock.group_stock_user'))]"/>
+    </record>
+</odoo>
