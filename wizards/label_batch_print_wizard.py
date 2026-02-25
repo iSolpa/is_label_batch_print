@@ -323,13 +323,50 @@ class LabelBatchPrintWizard(models.TransientModel):
         quantity_by_product = {}
         for line in self.line_ids:
             key = line.product_id.id if doc_model == 'product.product' else line.product_id.product_tmpl_id.id
-            quantity_by_product[key] = quantity_by_product.get(key, 0) + line.quantity
+            # Odoo product label engine expects string keys.
+            str_key = str(key)
+            quantity_by_product[str_key] = quantity_by_product.get(str_key, 0) + line.quantity
 
-        payload = {
-            # Compatibility keys expected by standard/custom product label reports.
+        # Build standard product.label.layout payload so reports using
+        # product.report.product_label_report._prepare_data stay compatible.
+        layout_vals = {
+            'custom_quantity': 1,
+        }
+        if doc_model == 'product.template':
+            layout_vals['product_tmpl_ids'] = [(6, 0, docs.ids)]
+        else:
+            layout_vals['product_ids'] = [(6, 0, docs.ids)]
+
+        report_name = (report.report_name or '').lower()
+        print_format = False
+        if '4x5' in report_name:
+            print_format = '4x5xprice'
+        elif '2x4' in report_name:
+            print_format = '2x4xprice'
+        if print_format and 'print_format' in self.env['product.label.layout']._fields:
+            layout_vals['print_format'] = print_format
+
+        layout_wizard = self.env['product.label.layout'].create(layout_vals)
+        try:
+            _xml_id, standard_data = layout_wizard._prepare_report_data()
+        except Exception:
+            # Fallback payload for non-standard templates.
+            standard_data = {
+                'active_model': doc_model,
+                'active_ids': docs.ids,
+                'layout_wizard': layout_wizard.id,
+            }
+
+        standard_data.update({
             'active_model': doc_model,
             'active_ids': docs.ids,
+            'layout_wizard': layout_wizard.id,
             'quantity_by_product': quantity_by_product,
+            'price_included': True,
+        })
+
+        payload = {
+            **standard_data,
             'label_batch_print': {
                 'wizard_id': self.id,
                 'warehouse_id': self.warehouse_id.id,
