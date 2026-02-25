@@ -30,7 +30,7 @@
 
                 <group string="Products" col="1">
                     <field name="line_ids" nolabel="1" context="{'default_wizard_id': id}">
-                        <tree editable="bottom" string="Label Lines">
+                        <list editable="bottom" string="Label Lines">
                             <field name="product_id"/>
                             <field name="quantity"/>
                             <field name="validation_status" readonly="1"/>
@@ -39,7 +39,7 @@
                             <field name="missing_default_code" readonly="1" optional="hide"/>
                             <field name="missing_barcode" readonly="1" optional="hide"/>
                             <field name="missing_price" readonly="1" optional="hide"/>
-                        </tree>
+                        </list>
                     </field>
                 </group>
 
