@@ -67,7 +67,6 @@
         <field name="res_model">label.batch.print.wizard</field>
         <field name="view_mode">form</field>
         <field name="target">new</field>
-        <field name="groups_id" eval="[(4, ref('stock.group_stock_user'))]"/>
     </record>
 
     <menuitem id="menu_label_batch_print_wizard"
@@ -85,7 +84,6 @@
         <field name="binding_model_id" ref="product.model_product_product"/>
         <field name="binding_type">action</field>
         <field name="binding_view_types">list,form</field>
-        <field name="groups_id" eval="[(4, ref('stock.group_stock_user'))]"/>
     </record>
 
     <record id="action_label_batch_print_from_product_template" model="ir.actions.act_window">
@@ -96,6 +94,5 @@
         <field name="binding_model_id" ref="product.model_product_template"/>
         <field name="binding_type">action</field>
         <field name="binding_view_types">list,form</field>
-        <field name="groups_id" eval="[(4, ref('stock.group_stock_user'))]"/>
     </record>
 </odoo>
