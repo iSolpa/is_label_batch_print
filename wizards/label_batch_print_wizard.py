@@ -244,14 +244,12 @@ class LabelBatchPrintWizard(models.TransientModel):
                 notif_type='warning',
                 title=_('Validation warnings'),
                 message=message,
-                next_action=self._reload_action(),
             )
 
         return self._notification_action(
             notif_type='success',
             title=_('Validation successful'),
             message=_('All selected lines are valid for printing.'),
-            next_action=self._reload_action(),
         )
 
     def _get_line_price(self, line):
@@ -316,7 +314,22 @@ class LabelBatchPrintWizard(models.TransientModel):
         warning_msg = self._validate_template_compatibility()
 
         report = self.template_report_id
+        docs = self.line_ids.mapped('product_id')
+        doc_model = 'product.product'
+        if report.model == 'product.template':
+            docs = docs.mapped('product_tmpl_id')
+            doc_model = 'product.template'
+
+        quantity_by_product = {}
+        for line in self.line_ids:
+            key = line.product_id.id if doc_model == 'product.product' else line.product_id.product_tmpl_id.id
+            quantity_by_product[key] = quantity_by_product.get(key, 0) + line.quantity
+
         payload = {
+            # Compatibility keys expected by standard/custom product label reports.
+            'active_model': doc_model,
+            'active_ids': docs.ids,
+            'quantity_by_product': quantity_by_product,
             'label_batch_print': {
                 'wizard_id': self.id,
                 'warehouse_id': self.warehouse_id.id,
@@ -329,13 +342,11 @@ class LabelBatchPrintWizard(models.TransientModel):
             }
         }
 
-        if report.model == 'product.template':
-            docs = self.line_ids.mapped('product_id.product_tmpl_id')
-            return report.report_action(docs, data=payload)
-
-        if report.model == 'product.product':
-            docs = self.line_ids.mapped('product_id')
-            return report.report_action(docs, data=payload)
+        if report.model in ('product.template', 'product.product'):
+            return report.with_context(
+                active_model=doc_model,
+                active_ids=docs.ids,
+            ).report_action(docs, data=payload)
 
         # product.label.layout reports are custom and may ignore docids.
         return report.report_action(self, data=payload)
@@ -351,15 +362,13 @@ class LabelBatchPrintWizard(models.TransientModel):
             'target': 'new',
         }
 
-    def _notification_action(self, notif_type, title, message, next_action=None):
+    def _notification_action(self, notif_type, title, message):
         params = {
             'type': notif_type,
             'title': title,
             'message': message,
             'sticky': False,
         }
-        if next_action:
-            params['next'] = next_action
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
